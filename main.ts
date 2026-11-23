@@ -12,13 +12,31 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
-const botDir = process.env.MAKEFUN_BOT_DIR ?? moduleDir;
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+// Candidate source directories, most specific first: the harness-provided bot
+// directory, this module's own location, then the working directory as a last
+// resort. The first one that actually holds VIDEO.json wins.
+const sourceCandidates = [
+  process.env.MAKEFUN_BOT_DIR,
+  moduleDir,
+  process.cwd(),
+].filter((dir): dir is string => typeof dir === 'string' && dir.length > 0);
+
 mkdirSync(outputDir, { recursive: true });
-try {
-  copyFileSync(join(botDir, 'VIDEO.json'), join(outputDir, 'VIDEO.json'));
-} catch (err) {
-  console.error(`main.ts: VIDEO.json not found in ${botDir}: ${(err as Error).message}`);
+let copied = false;
+for (const dir of sourceCandidates) {
+  try {
+    copyFileSync(join(dir, 'VIDEO.json'), join(outputDir, 'VIDEO.json'));
+    copied = true;
+    break;
+  } catch {
+    // Not in this directory; try the next candidate.
+  }
+}
+if (!copied) {
+  console.error(
+    `main.ts: VIDEO.json not found in any of: ${sourceCandidates.join(', ')}`,
+  );
   process.exit(1);
 }
